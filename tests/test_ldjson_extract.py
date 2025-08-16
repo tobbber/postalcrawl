@@ -1,42 +1,17 @@
 import re
 import time
-from collections import defaultdict
-from pprint import pprint
-
-import polars as pl
-import pytest
 from pathlib import Path
-import json
 
-from postalcrawl.extract import extract_ld_json
 from postalcrawl.preprocess import (
-    jsonld_generator,
-    generate_ld_json,
-    record_generator,
-    generate_html_responses,
-    filter_postal_address,
-    generate_deserialized_json,
+    StringExtract,
+    download_record_generator,
+    extract_addresses,
+    extract_postal_addresses,
     offline_record_generator,
-    extract_address_element,
+    parse_content_type,
 )
-
-
-@pytest.fixture
-def resources_dir():
-    return Path(__file__).parent / "resources"
-
-@pytest.fixture
-def html_response(resources_dir) -> bytes:
-    filepath = resources_dir / "formedge.com.my_shop-displays_unic-modular-glass-showcases.html"
-    with open(filepath, "rb") as f:
-        return f.read()
-
-def test_ldjson_extract(html_response):
-    items = list(extract_ld_json(html_response))
-    assert len(items) ==1
-    assert items[0].startswith('{"@context":"http:\\/\\/schema.org"')
-    data = json.loads(items[0])
-    assert isinstance(data, dict)
+from postalcrawl.stat_counter import StatCounter
+from tests.conftest import read_file
 
 
 def sanitize_json_ld(raw_ld_json: str) -> str:
@@ -47,7 +22,7 @@ def sanitize_json_ld(raw_ld_json: str) -> str:
     # Regex to find line breaks inside quoted strings
     pattern = r'("(?:[^"\\]|\\.)*?)\n((?:[^"\\]|\\.)*?")'
     while re.search(pattern, raw_ld_json):
-        raw_ld_json = re.sub(pattern, r'\1\\n\2', raw_ld_json)
+        raw_ld_json = re.sub(pattern, r"\1\\n\2", raw_ld_json)
     return raw_ld_json
 
 
@@ -60,41 +35,51 @@ def iter_to_n(iterable, n: int):
             break
         yield item
 
+
 def test_online():
-    stats = defaultdict(int)
+    stats = StatCounter()
     file_id = "crawl-data/CC-MAIN-2025-26/segments/1749709481111.44/warc/CC-MAIN-20250612112840-20250612142840-00000.warc.gz"
 
-    gen = record_generator(file_id, stats)
-    gen = generate_html_responses(gen, stats)
-    gen = generate_ld_json(gen, stats)
-    gen = filter_postal_address(gen, stats)
-    gen = generate_deserialized_json(gen, stats)
+    gen = download_record_generator(file_id, stats)
+    gen = extract_addresses(gen, stats)
 
     gen = iter_to_n(gen, 100)
     assert len(list(gen)) == 100
 
+
 def test_offline():
-    filePath = Path("/Users/tobi/Uni/postalcrawlV2/data/CC-MAIN-20250612112840-20250612142840-00009.warc")
+    filePath = Path(
+        "/Users/tobi/Uni/postalcrawlV2/data/CC-MAIN-20250612112840-20250612142840-00009.warc"
+    )
     assert filePath.exists()
-
-    stats = defaultdict(int)
-    gen = offline_record_generator(filePath, stats=stats)
-    gen = generate_html_responses(gen , stats)
-    gen = generate_ld_json(gen, stats)
-    gen = filter_postal_address(gen, stats)
-    gen = generate_deserialized_json(gen, stats)
-    gen = extract_address_element(gen, stats)
-    # gen = iter_to_n(gen, 10)
-    # alle = list(gen)
+    stats = StatCounter()
     start_time = time.time()
-    first = next(gen)
-    try:
-        for i, item in enumerate(gen):
-            pass
-    except Exception as e:
-        raise e
 
+    gen = offline_record_generator(filePath, stats)
+
+    gen = extract_addresses(gen, stats)
+    out = list(gen)
     elapsed = time.time() - start_time
-    assert elapsed < 1
+    assert len(out) == 100
+    assert elapsed == 0
 
-    assert stats == {}
+
+def test_parse_content_type():
+    assert parse_content_type("text/html; charset=UTF-8") == ("text/html", "utf-8")
+    assert parse_content_type("text/html; charset=utf-8") == ("text/html", "utf-8")
+    assert parse_content_type(None) == ("", None)
+
+
+def test_extract_addresses_from_ldjson(resources_dir):
+    content = read_file(resources_dir / "ldjson.1.json")
+    record = StringExtract(
+        content=content,
+        url="https://example.com",
+        warc_date="2023-10-01T00:00:00Z",
+        warc_rec_id="12345",
+        charset="utf-8",
+    )
+
+    gen = iter([record])
+    out = extract_postal_addresses(gen, StatCounter())
+    assert out

@@ -1,21 +1,19 @@
-import json
-from dataclasses import dataclass, asdict
-import os
+import dataclasses
 import re
 import sys
-import time
-from collections import defaultdict
 from pathlib import Path
-from sys import prefix
-from typing import Iterator
+from typing import Iterable, Iterator
 
 import msgspec
-import pandas as pd
 import requests
 from loguru import logger
 from parsel import Selector
 from warcio import ArchiveIterator
 from warcio.recordloader import ArcWarcRecord
+from werkzeug.http import parse_options_header
+
+from postalcrawl.models import PostalAddress, StringExtract
+from postalcrawl.stat_counter import StatCounter
 
 logger.remove()
 logger.add(sys.stdout, level="INFO")
@@ -25,7 +23,7 @@ def file_segment_info(file_id: str) -> tuple[str, str]:
     splits = file_id.split("/")
     segment = splits[3]
     sub_id = splits[-1]
-    segment_number = re.search(r"-(\d{5})\.warc\.gz$", sub_id).group(1)
+    segment_number = re.search(r"-(\d{5})\.warc\.gz$", sub_id).group(1)  # pyright: ignore [reportOptionalMemberAccess]
     return segment, segment_number
 
 
@@ -33,180 +31,163 @@ def crawl_url(file_id: str) -> str:
     return "https://data.commoncrawl.org/" + file_id
 
 
-def process_url(file_id: str, outdir: Path, overwrite: bool = False) -> Path | None:
-    # define files and skip if already exists
-    assert outdir.is_dir()
-    segment, segment_number = file_segment_info(file_id)
-    out_file = outdir / segment / f"{segment_number}.parquet"
-    out_file.parent.mkdir(exist_ok=True, parents=True)
-    if not overwrite and out_file.with_suffix(".done").is_file():
-        logger.info(
-            f"[{segment=} number={segment_number}] output file already exists. Skipping..."
-        )
-        return
-
-    # process file
-    start = time.perf_counter()
-    logger.info(f"[{segment=} number={segment_number}] Processing file...")
-    try:
-        df = pd.DataFrame(jsonld_generator(file_id))
-    except Exception as e:
-        # write error file
-        err_file = out_file.with_suffix(".error")
-        with open(err_file, "w") as f:
-            f.write(str(e))
-        logger.error(f"[{segment=} number={segment_number}] Error: {e}")
-        time.sleep(1)  # just to ensure we dont gently retry
-        return
-    elapsed = time.perf_counter() - start
-    df.to_parquet(out_file, compression="brotli")
-
-    file_size = os.stat(out_file).st_size
-    logger.info(
-        f"[{segment=} number={segment_number}] Took: {elapsed:.2f} seconds for {len(df)} records"
-    )
-    logger.debug(
-        f"[{segment=} number={segment_number}] Wrote {file_size/1024**2:.4} MB ({len(df)} recs) to {out_file}"
-    )
-    # write status file and delete error file if successful
-    out_file.with_suffix(".done").touch()
-    if out_file.with_suffix(".error").is_file():
-        out_file.with_suffix(".error").unlink()
-    return out_file
+# def process_url(file_id: str, outdir: Path, overwrite: bool = False) -> Path | None:
+#     # define files and skip if already exists
+#     assert outdir.is_dir()
+#     segment, segment_number = file_segment_info(file_id)
+#     out_file = outdir / segment / f"{segment_number}.parquet"
+#     out_file.parent.mkdir(exist_ok=True, parents=True)
+#     if not overwrite and out_file.with_suffix(".done").is_file():
+#         logger.info(f"[{segment=} number={segment_number}] output file already exists. Skipping...")
+#         return
+#
+#     # process file
+#     start = time.perf_counter()
+#     logger.info(f"[{segment=} number={segment_number}] Processing file...")
+#     try:
+#         df = pd.DataFrame(jsonld_generator(file_id))
+#     except Exception as e:
+#         # write error file
+#         err_file = out_file.with_suffix(".error")
+#         with open(err_file, "w") as f:
+#             f.write(str(e))
+#         logger.error(f"[{segment=} number={segment_number}] Error: {e}")
+#         time.sleep(1)  # just to ensure we dont gently retry
+#         return
+#     elapsed = time.perf_counter() - start
+#     df.to_parquet(out_file, compression="brotli")
+#
+#     file_size = os.stat(out_file).st_size
+#     logger.info(
+#         f"[{segment=} number={segment_number}] Took: {elapsed:.2f} seconds for {len(df)} records"
+#     )
+#     logger.debug(
+#         f"[{segment=} number={segment_number}] Wrote {file_size / 1024**2:.4} MB ({len(df)} recs) to {out_file}"
+#     )
+#     # write status file and delete error file if successful
+#     out_file.with_suffix(".done").touch()
+#     if out_file.with_suffix(".error").is_file():
+#         out_file.with_suffix(".error").unlink()
+#     return out_file
 
 
-def extract_charset(content: bytes) -> str | None:
-    charset_pattern = re.compile(rb"charset=[\'\"\s]?([\w-]+)[\'\"]?")
-    charset_match = charset_pattern.search(content.lower())
-    if charset_match:
-        charset = charset_match.group(0).decode("utf-8")
-        charset = charset.removeprefix("charset=").strip("\"' ")
-        return charset
-    return None
-
-
-# def extract_address_content(content: bytes) -> bytes:
-#     lower = content.lower()
-#     text_start: int = lower.find(b'"address"')
-#     text_end: int = lower.rfind(b'"address"')
-#     text_start = max(text_start - LEFT_PADDING, 0)
-#     text_end = min(text_end + RIGHT_PADDING, len(content) - 1)
-#     return content[text_start:text_end]
-
-def bytes_to_string(raw_bytes: bytes, charset: str | None) -> str:
-    try:
-        return raw_bytes.decode(charset or "utf-8")
-    except (LookupError, UnicodeDecodeError):
-        return raw_bytes.decode("utf-8", errors="replace")
-
-
-def record_generator(file_id: str, stats: defaultdict[int]) -> Iterator[ArcWarcRecord]:
+def download_record_generator(file_id: str, stats: StatCounter) -> Iterator[ArcWarcRecord]:
     data_stream = requests.get(crawl_url(file_id), stream=True)
     data_stream.raise_for_status()
     record_iter = ArchiveIterator(data_stream.raw, arc2warc=True)
     for record in record_iter:
+        stats.inc("warc/record")
         yield record
 
-def offline_record_generator(file_path: Path, stats: defaultdict[int]) -> Iterator[ArcWarcRecord]:
+
+def offline_record_generator(file_path: Path, stats: StatCounter) -> Iterator[ArcWarcRecord]:
     with open(file_path, "rb") as stream:
         for record in ArchiveIterator(stream, arc2warc=True):
+            stats.inc("warc/record")
             yield record
 
 
-
-def generate_html_responses(record_generator: Iterator[ArcWarcRecord],stats: defaultdict[int]) -> Iterator[ArcWarcRecord]:
+def filter_html_responses(
+    record_generator: Iterable[ArcWarcRecord], stats: StatCounter
+) -> Iterator[ArcWarcRecord]:
     for record in record_generator:
         if record.rec_type != "response":
             continue
-        stats["response"] += 1
+        stats.inc("warc/response")
+
         content_type = record.http_headers.get_header("Content-Type")
         if content_type is None:
+            stats.inc(f"warc/content_type/{None}")
             continue
-        stats["has_content_type"] += 1
-        if "html" not in content_type.lower() and "xml" not in content_type.lower():
+        media_type, charset = parse_content_type(content_type)
+        stats.inc(f"warc/content_type/{media_type}")
+
+        # todo: maybe just check for content type contains text?
+        not_html = "html" not in media_type
+        not_xml = "xml" not in media_type
+        if not_html and not_xml:
             continue
-            stats["not_html"] += 1
+        stats.inc("warc/html_response")
         yield record
 
 
+def parse_content_type(content_type: str | None) -> tuple[str, str | None]:
+    media_type, options = parse_options_header(content_type)
+    charset = options.get("charset")
+    if charset:
+        charset = charset.lower()
+    return media_type, charset
 
-@dataclass
-class StringExtract:
-    content: str
-    charset: str
-    url: str
-    warc_rec_id: str
-    warc_date: str
 
-@dataclass
-class DictExtract:
-    content: dict
-    charset: str
-    url: str
-    warc_rec_id: str
-    warc_date: str
-
-@dataclass
-class PostalAddress:
-    name: str
-    addressCountry: str
-    addressLocality: str
-    addressRegion: str
-    postalCode: str
-    streetAddress: str
-    addressCountry: str
-    url: str
-    warc_date: str
-    warc_rec_id: str
-
-def generate_ld_json(response_generator: Iterator[ArcWarcRecord], stats: defaultdict[int]) -> Iterator[StringExtract]:
-    logger.debug("generating ld+json")
+def extractor_response_content(
+    response_generator: Iterable[ArcWarcRecord], stats: StatCounter
+) -> Iterator[StringExtract]:
     for record in response_generator:
-        content = record.content_stream().read()
-        charset = extract_charset(content)
+        content_type = record.http_headers.get_header("Content-Type")
+        media_type, charset = parse_content_type(content_type)
+        stats.inc(f"response/charset/{charset or None}")
 
-        # todo: remove this filter if you generalize the extractor
-        if not b"postaladdress" in content.lower():
-            stats["no_address"] += 1
-            continue
-        content_string = bytes_to_string(content, charset)
+        raw_content: bytes = record.content_stream().read()
         try:
-            selector = Selector(text=content_string)
-            xpath_query= selector.xpath("//script[@type='application/ld+json']/text()").getall()
-        except ValueError as e:
-            stats["not_html"] += 1
-            continue
-        for item in xpath_query:
-                yield StringExtract(
-                    content=item.strip(),
-                    charset=charset,
-                    url= record.rec_headers.get_header("WARC-Target-URI"),
-                    warc_rec_id =  record.rec_headers.get_header("WARC-Record-ID"),
-                    warc_date = record.rec_headers.get_header("WARC-Date"),
-                )
+            content = raw_content.decode(charset or "utf-8", errors="replace")
+        except LookupError:  # likely invalid charset, fallback to utf-8
+            stats.inc(f"error/charset_unknown/{charset}")
+            content = raw_content.decode("utf-8", errors="replace")
+        yield StringExtract(
+            content=content,
+            charset=charset,
+            url=record.rec_headers.get_header("WARC-Target-URI"),
+            warc_rec_id=record.rec_headers.get_header("WARC-Record-ID"),
+            warc_date=record.rec_headers.get_header("WARC-Date"),
+        )
 
-def deserialize_json(json_string: str) -> dict:
-    return msgspec.json.decode(json_string)
 
-def generate_deserialized_json(gen:   Iterator[StringExtract], stats: defaultdict[int]) -> Iterator[DictExtract]:
-    # todo: use orjson  msgspec for faster json deserialization
-    logger.debug("json deserialized")
-    for item in gen:
-        try:
-            # data= json.loads(item.content)
-            data = deserialize_json(item.content)
-            stats["deserialized"] += 1
-            item.content = data
+def filter_contains_postaladdress(
+    response_generator: Iterable[StringExtract], stats: StatCounter
+) -> Iterator[StringExtract]:
+    for item in response_generator:
+        if "postaladdress" in item.content.lower():
             yield item
-        except msgspec.DecodeError as e:
-            stats["decode_error"] +=1
+        else:
+            stats.inc("filter/no_postal_address")
+
+
+def extract_ld_json(
+    response_generator: Iterable[StringExtract], stats: StatCounter
+) -> Iterator[StringExtract]:
+    for record in response_generator:
+        content = record.content
+        try:
+            ld_jsons = (
+                Selector(text=content)
+                .xpath("//script[@type='application/ld+json']/text()")
+                .getall()
+            )
+        except ValueError:
+            logger.debug(f"Failed to parse content as HTML: {content[:40]}...")
+            stats.inc("error/parsel/not_html")
             continue
+        for ld_json in ld_jsons:
+            yield dataclasses.replace(record, content=ld_json.strip())
 
 
-def filter_postal_address(gen: Iterator[StringExtract], stats: defaultdict[int]) -> Iterator[StringExtract]:
+def checkpoint_dataclass_to_jsonl(
+    gen: Iterable[StringExtract], stats: StatCounter
+) -> Iterator[StringExtract]:
+    def serialize_dataclass(dataclass) -> bytes:
+        d = dataclasses.asdict(dataclass)
+        return msgspec.json.encode(d, order="deterministic")
+
+    with open("ldjson_checkpoint.jsonl", "ab") as f:
+        for item in gen:
+            yield item
+            s = serialize_dataclass(item)
+            f.write(s + b"\n")
 
 
-
+def filter_postal_address(
+    gen: Iterable[StringExtract], stats: StatCounter
+) -> Iterator[StringExtract]:
     logger.debug("remove unwanted json")
     for item in gen:
         if "postaladdress" in item.content.lower():
@@ -231,45 +212,54 @@ def extract_address_from_json(root):
                     yield from extract_address_from_json(value)
 
 
+def extract_postal_addresses(
+    gen: Iterable[StringExtract], stats: StatCounter
+) -> Iterator[PostalAddress]:
+    def unpack_json(root: dict | list) -> Iterator[dict]:
+        if isinstance(root, dict):
+            yield root
+            for v in root.values():
+                yield from unpack_json(v)
+        elif isinstance(root, list):
+            for item in root:
+                yield from unpack_json(item)
 
-def extract_address_element(gen: Iterator[DictExtract], stats: defaultdict[int]):
-
-    # DictExtract
-    for item in gen:
-        for named_address in extract_address_from_json(item.content):
-            address = named_address["address"]
-            stats["extracted_address"] += 1
+    for record in gen:
+        try:
+            data = msgspec.json.decode(record.content)
+        except msgspec.DecodeError as e:
+            logger.debug(f"Failed to load as JSON with error: {e}\n{record.content[:60]}")
+            stats.inc("error/json/decode_error")
+            continue
+        for json_data in unpack_json(data):
+            address = json_data.get("address")
+            if not isinstance(address, dict):
+                continue
+            if address.get("@type") != "PostalAddress":
+                continue
+            stats.inc("postal_address/extracted")
+            # todo: we should dedupe if same addresses are found but one has a name and the other does not
             yield PostalAddress(
-                name=named_address.get("name"),
+                name=json_data.get("name"),
                 addressCountry=address.get("addressCountry"),
                 addressLocality=address.get("addressLocality"),
                 addressRegion=address.get("addressRegion"),
                 postalCode=address.get("postalCode"),
                 streetAddress=address.get("streetAddress"),
-                url=item.url,
-                warc_date=item.warc_date,
-                warc_rec_id=item.warc_rec_id
+                url=record.url,
+                warc_date=record.warc_date,
+                warc_rec_id=record.warc_rec_id,
             )
 
-    # jsonpath_expression = jsonpath_ng.parse("$..address")
-    for item in gen:
-        yield
 
-
-def jsonld_generator(file_id: str):
-    logger.debug("generating json string")
-    stats = defaultdict(int)
-    gen = record_generator(file_id, stats)
-    gen = generate_html_responses(gen , stats)
-    gen = generate_ld_json(gen, stats)
-    gen = filter_postal_address(gen, stats)
-    dict_gen = generate_deserialized_json(gen, stats)
-
-    yield from dict_gen
-    # sanitize and load json
-    print(stats)
-    segment, offset = file_segment_info(file_id)
-    logger.debug(
-        f"[{segment=} {offset=}] done processing. stats: {dict(stats)} ({file_id=})"
-    )
-
+def extract_addresses(
+    record_generator: Iterable[ArcWarcRecord], stats: StatCounter
+) -> Iterator[PostalAddress]:
+    gen = filter_html_responses(record_generator, stats)
+    gen = filter_html_responses(gen, stats)
+    gen = extractor_response_content(gen, stats)
+    gen = filter_contains_postaladdress(gen, stats)
+    gen = extract_ld_json(gen, stats)
+    gen = filter_contains_postaladdress(gen, stats)
+    gen = extract_postal_addresses(gen, stats)
+    yield from gen

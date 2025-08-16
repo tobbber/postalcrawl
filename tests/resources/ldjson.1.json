@@ -1,0 +1,147 @@
+{
+  "@context" : "https://schema.org",
+  "@graph" : [ {
+    "@type" : "Place",
+    "@id" : "http://lokertribun.com/#place",
+    "address" : {
+      "@type" : "PostalAddress",
+      "streetAddress" : "Sukabumi",
+      "addressLocality" : "Sukabumi",
+      "addressRegion" : "Jawa Barat",
+      "postalCode" : "57741",
+      "addressCountry" : "3166-1"
+    }
+  }, {
+    "@type" : "Organization",
+    "@id" : "http://lokertribun.com/#organization",
+    "name" : "Loker Tribun",
+    "url" : "https://lokertribun.com",
+    "email" : "kuwala@gmail.com",
+    "address" : {
+      "@type" : "PostalAddress",
+      "streetAddress" : "Sukabumi",
+      "addressLocality" : "Sukabumi",
+      "addressRegion" : "Jawa Barat",
+      "postalCode" : "57741",
+      "addressCountry" : "3166-1"
+    },
+    "logo" : {
+      "@type" : "ImageObject",
+      "@id" : "http://lokertribun.com/#logo",
+      "url" : "http://lokertribun.com/wp-content/uploads/2025/04/Portalkerja.svg",
+      "contentUrl" : "http://lokertribun.com/wp-content/uploads/2025/04/Portalkerja.svg",
+      "caption" : "Loker Tribun",
+      "inLanguage" : "id",
+      "width" : "2861",
+      "height" : "1001"
+    },
+    "description" : "Loker Tribun",
+    "legalName" : "Kuwala",
+    "location" : {
+      "@id" : "http://lokertribun.com/#place"
+    }
+  }, {
+    "@type" : "WebSite",
+    "@id" : "http://lokertribun.com/#website",
+    "url" : "http://lokertribun.com",
+    "name" : "Loker Tribun",
+    "alternateName" : "Loker Tribun",
+    "publisher" : {
+      "@id" : "http://lokertribun.com/#organization"
+    },
+    "inLanguage" : "id"
+  }, {
+    "@type" : "ImageObject",
+    "@id" : "http://lokertribun.com/wp-content/uploads/2025/04/Lowongan-Kerja1.png",
+    "url" : "http://lokertribun.com/wp-content/uploads/2025/04/Lowongan-Kerja1.png",
+    "width" : "600",
+    "height" : "315",
+    "caption" : "Lowongan Kerja PT Pertamina Maintenance &amp; Construction Terbaru",
+    "inLanguage" : "id"
+  }, {
+    "@type" : "BreadcrumbList",
+    "@id" : "http://lokertribun.com/job/lowongan-kerja-pt-pertamina-maintenance-construction-terbaru/#breadcrumb",
+    "itemListElement" : [ {
+      "@type" : "ListItem",
+      "position" : "1",
+      "item" : {
+        "@id" : "https://lokertribun.com",
+        "name" : "Home"
+      }
+    }, {
+      "@type" : "ListItem",
+      "position" : "2",
+      "item" : {
+        "@id" : "http://lokertribun.com/loker/jakarta/",
+        "name" : "Jakarta"
+      }
+    }, {
+      "@type" : "ListItem",
+      "position" : "3",
+      "item" : {
+        "@id" : "http://lokertribun.com/job/lowongan-kerja-pt-pertamina-maintenance-construction-terbaru/",
+        "name" : "Lowongan Kerja PT Pertamina Maintenance &#038; Construction Terbaru"
+      }
+    } ]
+  }, {
+    "@type" : "WebPage",
+    "@id" : "http://lokertribun.com/job/lowongan-kerja-pt-pertamina-maintenance-construction-terbaru/#webpage",
+    "url" : "http://lokertribun.com/job/lowongan-kerja-pt-pertamina-maintenance-construction-terbaru/",
+    "name" : "Lowongan Kerja PT Pertamina Maintenance &amp; Construction Terbaru",
+    "datePublished" : "2025-04-17T14:06:22+07:00",
+    "dateModified" : "2025-04-17T14:06:22+07:00",
+    "isPartOf" : {
+      "@id" : "http://lokertribun.com/#website"
+    },
+    "primaryImageOfPage" : {
+      "@id" : "http://lokertribun.com/wp-content/uploads/2025/04/Lowongan-Kerja1.png"
+    },
+    "inLanguage" : "id",
+    "breadcrumb" : {
+      "@id" : "http://lokertribun.com/job/lowongan-kerja-pt-pertamina-maintenance-construction-terbaru/#breadcrumb"
+    }
+  }, {
+    "@type" : "Person",
+    "@id" : "http://lokertribun.com/author/01a863569eba8025/",
+    "name" : "admin",
+    "url" : "http://lokertribun.com/author/01a863569eba8025/",
+    "image" : {
+      "@type" : "ImageObject",
+      "@id" : "https://secure.gravatar.com/avatar/c0635063845c3a137bf53a9f4dbe0968b841905694fdcadd3699798fa83f63cf?s=96&amp;d=mm&amp;r=g",
+      "url" : "https://secure.gravatar.com/avatar/c0635063845c3a137bf53a9f4dbe0968b841905694fdcadd3699798fa83f63cf?s=96&amp;d=mm&amp;r=g",
+      "caption" : "admin",
+      "inLanguage" : "id"
+    },
+    "sameAs" : [ "https://lokertribun.com" ],
+    "worksFor" : {
+      "@id" : "http://lokertribun.com/#organization"
+    }
+  }, {
+    "@type" : "BlogPosting",
+    "headline" : "Lowongan Kerja PT Pertamina Maintenance &amp; Construction Terbaru",
+    "keywords" : "PT Pertamina Maintenance &amp; Construction",
+    "datePublished" : "2025-04-17T14:06:22+07:00",
+    "dateModified" : "2025-04-17T14:06:22+07:00",
+    "articleSection" : "Jakarta",
+    "author" : {
+      "@id" : "http://lokertribun.com/author/01a863569eba8025/",
+      "name" : "admin"
+    },
+    "publisher" : {
+      "@id" : "http://lokertribun.com/#organization"
+    },
+    "description" : "Loker Tribun - PT Pertamina Maintenance &amp; Construction (PMC) adalah anak perusahaan dari PT Pertamina (Persero) yang bergerak di bidang pemeliharaan dan",
+    "name" : "Lowongan Kerja PT Pertamina Maintenance &amp; Construction Terbaru",
+    "@id" : "http://lokertribun.com/job/lowongan-kerja-pt-pertamina-maintenance-construction-terbaru/#richSnippet",
+    "isPartOf" : {
+      "@id" : "http://lokertribun.com/job/lowongan-kerja-pt-pertamina-maintenance-construction-terbaru/#webpage"
+    },
+    "image" : {
+      "@id" : "http://lokertribun.com/wp-content/uploads/2025/04/Lowongan-Kerja1.png"
+    },
+    "inLanguage" : "id",
+    "mainEntityOfPage" : {
+      "@id" : "http://lokertribun.com/job/lowongan-kerja-pt-pertamina-maintenance-construction-terbaru/#webpage"
+    }
+  } ]
+}
