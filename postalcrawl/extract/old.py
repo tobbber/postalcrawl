@@ -5,7 +5,8 @@
 #     out_file = outdir / segment / f"{segment_number}.parquet"
 #     out_file.parent.mkdir(exist_ok=True, parents=True)
 #     if not overwrite and out_file.with_suffix(".done").is_file():
-#         logger.info(f"[{segment=} number={segment_number}] output file already exists. Skipping...")
+#         logger.info(f"[{segment=} number={segment_n
+#         mber}] output file already exists. Skipping...")
 #         return
 #
 #     # process file

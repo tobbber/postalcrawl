@@ -2,13 +2,14 @@ import json
 import time
 from pathlib import Path
 
+import joblib
+import polars as pl
 from loguru import logger
-from polars import pl
 
 from postalcrawl.extract.extract import extract_addresses
 from postalcrawl.extract.warc_loaders import download_record_generator
 from postalcrawl.stats import StatCounter
-from postalcrawl.utils import file_segment_info
+from postalcrawl.utils import file_segment_info, project_root
 
 
 def extract_addresses_from_file_id(file_id: str, dest_dir: Path, skip_existing: bool = True):
@@ -43,3 +44,21 @@ def extract_addresses_from_file_id(file_id: str, dest_dir: Path, skip_existing: 
         with open(error_file, "w") as f:
             f.write(str(ex))
         return
+
+
+def main():
+    path_file = project_root() / "warc_paths" / "2025-30.warc.paths"
+    with open(path_file, "r") as f:
+        paths = [p.strip() for p in f.readlines()]
+
+    dest_dir = project_root() / "data" / "extracted_addresses"
+
+    def extract(file_id: str):
+        return extract_addresses_from_file_id(file_id, dest_dir)
+
+    tasks = (joblib.delayed(extract)(p) for p in paths)
+    joblib.Parallel(n_jobs=8, verbose=9)(tasks)
+
+
+if __name__ == "__main__":
+    main()

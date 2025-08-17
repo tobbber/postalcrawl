@@ -20,3 +20,7 @@ def file_segment_info(file_id: str) -> tuple[str, str]:
     sub_id = splits[-1]
     segment_number = re.search(r"-(\d{5})\.warc\.gz$", sub_id).group(1)  # pyright: ignore [reportOptionalMemberAccess]
     return segment, segment_number
+
+
+def project_root() -> Path:
+    return Path(__file__).parent.parent
