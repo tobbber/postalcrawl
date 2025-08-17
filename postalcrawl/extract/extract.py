@@ -1,90 +1,20 @@
 import dataclasses
-import re
 import sys
-from pathlib import Path
 from typing import Iterable, Iterator
 
 import msgspec
-import requests
 from loguru import logger
 from parsel import Selector
-from warcio import ArchiveIterator
+from tqdm import tqdm
 from warcio.recordloader import ArcWarcRecord
-from werkzeug.http import parse_options_header
 
+from postalcrawl.extract.clean_address import clean_address_fields
+from postalcrawl.extract.utils import parse_content_type
 from postalcrawl.models import PostalAddress, StringExtract
-from postalcrawl.stat_counter import StatCounter
+from postalcrawl.stats import StatCounter
 
 logger.remove()
 logger.add(sys.stdout, level="INFO")
-
-
-def file_segment_info(file_id: str) -> tuple[str, str]:
-    splits = file_id.split("/")
-    segment = splits[3]
-    sub_id = splits[-1]
-    segment_number = re.search(r"-(\d{5})\.warc\.gz$", sub_id).group(1)  # pyright: ignore [reportOptionalMemberAccess]
-    return segment, segment_number
-
-
-def crawl_url(file_id: str) -> str:
-    return "https://data.commoncrawl.org/" + file_id
-
-
-# def process_url(file_id: str, outdir: Path, overwrite: bool = False) -> Path | None:
-#     # define files and skip if already exists
-#     assert outdir.is_dir()
-#     segment, segment_number = file_segment_info(file_id)
-#     out_file = outdir / segment / f"{segment_number}.parquet"
-#     out_file.parent.mkdir(exist_ok=True, parents=True)
-#     if not overwrite and out_file.with_suffix(".done").is_file():
-#         logger.info(f"[{segment=} number={segment_number}] output file already exists. Skipping...")
-#         return
-#
-#     # process file
-#     start = time.perf_counter()
-#     logger.info(f"[{segment=} number={segment_number}] Processing file...")
-#     try:
-#         df = pd.DataFrame(jsonld_generator(file_id))
-#     except Exception as e:
-#         # write error file
-#         err_file = out_file.with_suffix(".error")
-#         with open(err_file, "w") as f:
-#             f.write(str(e))
-#         logger.error(f"[{segment=} number={segment_number}] Error: {e}")
-#         time.sleep(1)  # just to ensure we dont gently retry
-#         return
-#     elapsed = time.perf_counter() - start
-#     df.to_parquet(out_file, compression="brotli")
-#
-#     file_size = os.stat(out_file).st_size
-#     logger.info(
-#         f"[{segment=} number={segment_number}] Took: {elapsed:.2f} seconds for {len(df)} records"
-#     )
-#     logger.debug(
-#         f"[{segment=} number={segment_number}] Wrote {file_size / 1024**2:.4} MB ({len(df)} recs) to {out_file}"
-#     )
-#     # write status file and delete error file if successful
-#     out_file.with_suffix(".done").touch()
-#     if out_file.with_suffix(".error").is_file():
-#         out_file.with_suffix(".error").unlink()
-#     return out_file
-
-
-def download_record_generator(file_id: str, stats: StatCounter) -> Iterator[ArcWarcRecord]:
-    data_stream = requests.get(crawl_url(file_id), stream=True)
-    data_stream.raise_for_status()
-    record_iter = ArchiveIterator(data_stream.raw, arc2warc=True)
-    for record in record_iter:
-        stats.inc("warc/record")
-        yield record
-
-
-def offline_record_generator(file_path: Path, stats: StatCounter) -> Iterator[ArcWarcRecord]:
-    with open(file_path, "rb") as stream:
-        for record in ArchiveIterator(stream, arc2warc=True):
-            stats.inc("warc/record")
-            yield record
 
 
 def filter_html_responses(
@@ -109,14 +39,6 @@ def filter_html_responses(
             continue
         stats.inc("warc/html_response")
         yield record
-
-
-def parse_content_type(content_type: str | None) -> tuple[str, str | None]:
-    media_type, options = parse_options_header(content_type)
-    charset = options.get("charset")
-    if charset:
-        charset = charset.lower()
-    return media_type, charset
 
 
 def extractor_response_content(
@@ -171,20 +93,6 @@ def extract_ld_json(
             yield dataclasses.replace(record, content=ld_json.strip())
 
 
-def checkpoint_dataclass_to_jsonl(
-    gen: Iterable[StringExtract], stats: StatCounter
-) -> Iterator[StringExtract]:
-    def serialize_dataclass(dataclass) -> bytes:
-        d = dataclasses.asdict(dataclass)
-        return msgspec.json.encode(d, order="deterministic")
-
-    with open("ldjson_checkpoint.jsonl", "ab") as f:
-        for item in gen:
-            yield item
-            s = serialize_dataclass(item)
-            f.write(s + b"\n")
-
-
 def filter_postal_address(
     gen: Iterable[StringExtract], stats: StatCounter
 ) -> Iterator[StringExtract]:
@@ -196,20 +104,6 @@ def filter_postal_address(
         else:
             stats["no_address"] += 1
             continue
-
-
-def extract_address_from_json(root):
-    if isinstance(root, list):
-        for item in root:
-            if isinstance(item, dict):
-                yield from extract_address_from_json(item)
-    if isinstance(root, dict):
-        for key, value in root.items():
-            if (key == "address") and (value.get("@type") == "PostalAddress"):
-                yield root
-            else:
-                if isinstance(value, dict):
-                    yield from extract_address_from_json(value)
 
 
 def extract_postal_addresses(
@@ -239,13 +133,21 @@ def extract_postal_addresses(
                 continue
             stats.inc("postal_address/extracted")
             # todo: we should dedupe if same addresses are found but one has a name and the other does not
+
+            name = json_data.get("name")
+            country = address.get("addressCountry")
+            region = address.get("addressRegion")
+            locality = address.get("addressLocality")
+            postal_code = address.get("postalCode")
+            street_address = address.get("streetAddress")
+
             yield PostalAddress(
-                name=json_data.get("name"),
-                addressCountry=address.get("addressCountry"),
-                addressLocality=address.get("addressLocality"),
-                addressRegion=address.get("addressRegion"),
-                postalCode=address.get("postalCode"),
-                streetAddress=address.get("streetAddress"),
+                name=name,
+                country=country,
+                locality=locality,
+                region=region,
+                postalCode=postal_code,
+                street=street_address,
                 url=record.url,
                 warc_date=record.warc_date,
                 warc_rec_id=record.warc_rec_id,
@@ -253,13 +155,15 @@ def extract_postal_addresses(
 
 
 def extract_addresses(
-    record_generator: Iterable[ArcWarcRecord], stats: StatCounter
+    record_generator: Iterable[ArcWarcRecord], stats: StatCounter, verbose: bool = False
 ) -> Iterator[PostalAddress]:
     gen = filter_html_responses(record_generator, stats)
-    gen = filter_html_responses(gen, stats)
+    if verbose:
+        gen = tqdm(gen)
     gen = extractor_response_content(gen, stats)
     gen = filter_contains_postaladdress(gen, stats)
     gen = extract_ld_json(gen, stats)
     gen = filter_contains_postaladdress(gen, stats)
     gen = extract_postal_addresses(gen, stats)
+    gen = clean_address_fields(gen, stats)
     yield from gen

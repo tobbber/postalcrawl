@@ -1,7 +1,7 @@
-import dataclasses
+from dataclasses import dataclass
 
 
-@dataclasses.dataclass
+@dataclass(frozen=True, slots=True)
 class StringExtract:
     content: str
     charset: str | None
@@ -10,24 +10,25 @@ class StringExtract:
     warc_date: str
 
 
-@dataclasses.dataclass
-class DictExtract:
-    content: dict
-    charset: str
-    url: str
-    warc_rec_id: str
-    warc_date: str
-
-
-@dataclasses.dataclass
+@dataclass(frozen=True, slots=True)
 class PostalAddress:
-    name: str | None
-    addressCountry: str | None
-    addressLocality: str | None
-    addressRegion: str | None
-    postalCode: str | None
-    streetAddress: str | None
-    addressCountry: str | None
+    # extraction info
     url: str
     warc_date: str
     warc_rec_id: str
+    # address
+    name: str | None
+    street: str | None
+    locality: str | None
+    postalCode: str | None = None
+    region: str | None = None
+    country: str | None = None
+
+    def __str__(self):
+        return f"""
+        {self.name}
+        {self.street}
+        {self.locality}, {self.postalCode} 
+        {self.region} 
+        {self.country}
+        """

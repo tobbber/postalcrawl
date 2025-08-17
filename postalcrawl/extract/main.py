@@ -1,0 +1,45 @@
+import json
+import time
+from pathlib import Path
+
+from loguru import logger
+from polars import pl
+
+from postalcrawl.extract.extract import extract_addresses
+from postalcrawl.extract.warc_loaders import download_record_generator
+from postalcrawl.stats import StatCounter
+from postalcrawl.utils import file_segment_info
+
+
+def extract_addresses_from_file_id(file_id: str, dest_dir: Path, skip_existing: bool = True):
+    start_time = time.perf_counter()
+    # io setup
+    segment, seg_num = file_segment_info(file_id)
+    parquet_path = Path(dest_dir) / segment / f"{seg_num}.parquet"
+    if skip_existing and parquet_path.exists():
+        logger.info(f"Skipping existing file: {parquet_path}")
+        return
+    parquet_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # data processing
+    try:
+        stats = StatCounter()
+        gen = download_record_generator(file_id, stats)
+        gen = extract_addresses(gen, stats, verbose=True)
+
+        df = pl.DataFrame(gen)
+        df = df.unique()
+        df.write_parquet(parquet_path, compression="brotli")
+        with open(parquet_path.with_suffix("stats.json"), "w") as f:
+            json.dump(stats, f)
+        elapsed = time.perf_counter() - start_time
+        logger.info(
+            f"[segment={segment} number={seg_num}] Extracted {len(df)} addresses. Elapsed time: {elapsed:.2f}s."
+        )
+
+    except Exception as ex:
+        logger.error(f"Error processing file {file_id}: {ex}")
+        error_file = parquet_path.with_suffix(".error")
+        with open(error_file, "w") as f:
+            f.write(str(ex))
+        return
