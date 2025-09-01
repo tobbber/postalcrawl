@@ -5,10 +5,9 @@ from typing import Iterable, Iterator
 import msgspec
 from loguru import logger
 from parsel import Selector
-from tqdm import tqdm
 from warcio.recordloader import ArcWarcRecord
 
-from postalcrawl.extract.clean_address import clean_address_fields
+from postalcrawl.extract.clean_address import _clean_address_fields
 from postalcrawl.extract.utils import parse_content_type
 from postalcrawl.models import PostalAddress, StringExtract
 from postalcrawl.stats import StatCounter
@@ -17,7 +16,7 @@ logger.remove()
 logger.add(sys.stdout, level="INFO")
 
 
-def filter_html_responses(
+def _filter_html_responses(
     record_generator: Iterable[ArcWarcRecord], stats: StatCounter
 ) -> Iterator[ArcWarcRecord]:
     for record in record_generator:
@@ -41,7 +40,7 @@ def filter_html_responses(
         yield record
 
 
-def extractor_response_content(
+def _extractor_response_content(
     response_generator: Iterable[ArcWarcRecord], stats: StatCounter
 ) -> Iterator[StringExtract]:
     for record in response_generator:
@@ -64,7 +63,7 @@ def extractor_response_content(
         )
 
 
-def filter_contains_postaladdress(
+def _filter_contains_postaladdress(
     response_generator: Iterable[StringExtract], stats: StatCounter
 ) -> Iterator[StringExtract]:
     for item in response_generator:
@@ -74,7 +73,7 @@ def filter_contains_postaladdress(
             stats.inc("filter/no_postal_address")
 
 
-def extract_ld_json(
+def _extract_ld_json(
     response_generator: Iterable[StringExtract], stats: StatCounter
 ) -> Iterator[StringExtract]:
     for record in response_generator:
@@ -93,20 +92,20 @@ def extract_ld_json(
             yield dataclasses.replace(record, content=ld_json.strip())
 
 
-def filter_postal_address(
+def _filter_postal_address(
     gen: Iterable[StringExtract], stats: StatCounter
 ) -> Iterator[StringExtract]:
     logger.debug("remove unwanted json")
     for item in gen:
         if "postaladdress" in item.content.lower():
-            stats[f"{filter_postal_address.__name__}:has_postal_address"] += 1
+            stats[f"{_filter_postal_address.__name__}/has_postal_address"] += 1
             yield item
         else:
             stats["no_address"] += 1
             continue
 
 
-def extract_postal_addresses(
+def _extract_postal_addresses(
     gen: Iterable[StringExtract], stats: StatCounter
 ) -> Iterator[PostalAddress]:
     def unpack_json(root: dict | list) -> Iterator[dict]:
@@ -155,15 +154,13 @@ def extract_postal_addresses(
 
 
 def extract_addresses(
-    record_generator: Iterable[ArcWarcRecord], stats: StatCounter, verbose: bool = False
+    record_generator: Iterable[ArcWarcRecord], stats: StatCounter
 ) -> Iterator[PostalAddress]:
-    gen = filter_html_responses(record_generator, stats)
-    if verbose:
-        gen = tqdm(gen)
-    gen = extractor_response_content(gen, stats)
-    gen = filter_contains_postaladdress(gen, stats)
-    gen = extract_ld_json(gen, stats)
-    gen = filter_contains_postaladdress(gen, stats)
-    gen = extract_postal_addresses(gen, stats)
-    gen = clean_address_fields(gen, stats)
+    gen = _filter_html_responses(record_generator, stats)
+    gen = _extractor_response_content(gen, stats)
+    gen = _filter_contains_postaladdress(gen, stats)
+    gen = _extract_ld_json(gen, stats)
+    gen = _filter_contains_postaladdress(gen, stats)
+    gen = _extract_postal_addresses(gen, stats)
+    gen = _clean_address_fields(gen, stats)
     yield from gen

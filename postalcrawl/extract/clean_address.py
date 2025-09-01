@@ -51,7 +51,7 @@ def clear_string(value: Any) -> str | None:
     return s
 
 
-def clean_address_fields(
+def _clean_address_fields(
     address_generator: Iterable[PostalAddress], stats: StatCounter
 ) -> Iterator[PostalAddress]:
     def field_has_content(s: str | None) -> bool:

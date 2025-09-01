@@ -1,3 +1,5 @@
+# This file contains the execution logic to extract addresses from WARC files
+
 import json
 import time
 from pathlib import Path
@@ -5,6 +7,7 @@ from pathlib import Path
 import joblib
 import polars as pl
 from loguru import logger
+from tqdm import tqdm
 
 from postalcrawl.extract.extract import extract_addresses
 from postalcrawl.extract.warc_loaders import download_record_generator
@@ -26,12 +29,13 @@ def extract_addresses_from_file_id(file_id: str, dest_dir: Path, skip_existing: 
     try:
         stats = StatCounter()
         gen = download_record_generator(file_id, stats)
-        gen = extract_addresses(gen, stats, verbose=True)
+        gen = extract_addresses(gen, stats)
+        gen = tqdm(gen)
 
         df = pl.DataFrame(gen)
         df = df.unique()
         df.write_parquet(parquet_path, compression="brotli")
-        with open(parquet_path.with_suffix("stats.json"), "w") as f:
+        with open(parquet_path.with_name(parquet_path.stem + ".stats.json"), "w") as f:
             json.dump(stats, f)
         elapsed = time.perf_counter() - start_time
         logger.info(
@@ -57,7 +61,7 @@ def main():
         return extract_addresses_from_file_id(file_id, dest_dir)
 
     tasks = (joblib.delayed(extract)(p) for p in paths)
-    joblib.Parallel(n_jobs=8, verbose=9)(tasks)
+    joblib.Parallel(n_jobs=1, verbose=9)(tasks)
 
 
 if __name__ == "__main__":
