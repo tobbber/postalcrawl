@@ -33,9 +33,9 @@ def extract_addresses_from_file_id(file_id: str, dest_dir: Path, skip_existing: 
         stats = StatCounter()
         gen = download_record_generator(file_id, stats)
         gen = extract_addresses(gen, stats)
-        gen = tqdm(gen)
+        # gen = tqdm(gen)
 
-        df = pl.DataFrame(gen)
+        df = pl.DataFrame((x for x in gen))
         df = df.unique()
         df.write_parquet(parquet_path, compression="brotli")
         with open(parquet_path.with_name(parquet_path.stem + ".stats.json"), "w") as f:
@@ -53,20 +53,19 @@ def extract_addresses_from_file_id(file_id: str, dest_dir: Path, skip_existing: 
         return
 
 
-def main():
+def main(source_paths_file: Path, output_dir: Path):
+    assert source_paths_file.is_file(), f"{source_paths_file=} is not a file"
+    assert output_dir.is_dir(), f"{output_dir=} is not a directory"
+
     with open(CC_PATHS_FILE, "r") as f:
         paths = [p.strip() for p in f.readlines()]
 
-    dest_dir = ADDRESS_OUT_DIR
-
     def extract(file_id: str):
-        return extract_addresses_from_file_id(file_id, dest_dir)
+        return extract_addresses_from_file_id(file_id, output_dir)
 
-    tasks = (joblib.delayed(extract)(p) for p in paths)
-    joblib.Parallel(n_jobs=1, verbose=9)(tasks)
+    tasks = (joblib.delayed(extract)(p) for p in tqdm(paths))
+    joblib.Parallel(n_jobs=6, verbose=9)(tasks)
 
 
 if __name__ == "__main__":
-    assert CC_PATHS_FILE.is_file(), f"{CC_PATHS_FILE=} is not a file"
-    assert ADDRESS_OUT_DIR.is_dir(), f"{ADDRESS_OUT_DIR=} is not a directory"
-    main()
+    main(CC_PATHS_FILE, ADDRESS_OUT_DIR)
