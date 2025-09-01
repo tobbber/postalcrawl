@@ -14,6 +14,9 @@ from postalcrawl.extract.warc_loaders import download_record_generator
 from postalcrawl.stats import StatCounter
 from postalcrawl.utils import file_segment_info, project_root
 
+CC_PATHS_FILE = project_root() / "warc_paths" / "2025-30.warc.paths"
+ADDRESS_OUT_DIR = project_root() / "data" / "extracted_addresses"
+
 
 def extract_addresses_from_file_id(file_id: str, dest_dir: Path, skip_existing: bool = True):
     start_time = time.perf_counter()
@@ -51,11 +54,10 @@ def extract_addresses_from_file_id(file_id: str, dest_dir: Path, skip_existing: 
 
 
 def main():
-    path_file = project_root() / "warc_paths" / "2025-30.warc.paths"
-    with open(path_file, "r") as f:
+    with open(CC_PATHS_FILE, "r") as f:
         paths = [p.strip() for p in f.readlines()]
 
-    dest_dir = project_root() / "data" / "extracted_addresses"
+    dest_dir = ADDRESS_OUT_DIR
 
     def extract(file_id: str):
         return extract_addresses_from_file_id(file_id, dest_dir)
@@ -65,4 +67,6 @@ def main():
 
 
 if __name__ == "__main__":
+    assert CC_PATHS_FILE.is_file(), f"{CC_PATHS_FILE=} is not a file"
+    assert ADDRESS_OUT_DIR.is_dir(), f"{ADDRESS_OUT_DIR=} is not a directory"
     main()
