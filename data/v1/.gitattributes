@@ -1,0 +1,9 @@
+9m-noname/full.parquet filter=lfs diff=lfs merge=lfs -text
+9m-noname/targets.csv filter=lfs diff=lfs merge=lfs -text
+9m-noname/values.csv filter=lfs diff=lfs merge=lfs -text
+2m-named/full.parquet filter=lfs diff=lfs merge=lfs -text
+2m-named/targets.csv filter=lfs diff=lfs merge=lfs -text
+2m-named/values.csv filter=lfs diff=lfs merge=lfs -text
+240k/full.parquet filter=lfs diff=lfs merge=lfs -text
+240k/targets.csv filter=lfs diff=lfs merge=lfs -text
+240k/values.csv filter=lfs diff=lfs merge=lfs -text
