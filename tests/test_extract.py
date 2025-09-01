@@ -6,13 +6,13 @@ import polars as pl
 import pytest
 from tqdm import tqdm
 
-from postalcrawl.extract.clean_address import clean_address_fields
+from postalcrawl.extract.clean_address import _clean_address_fields
 from postalcrawl.extract.extract import (
     StringExtract,
+    _extract_ld_json,
+    _extract_postal_addresses,
+    _filter_html_responses,
     extract_addresses,
-    extract_ld_json,
-    extract_postal_addresses,
-    filter_html_responses,
 )
 from postalcrawl.extract.utils import parse_content_type
 from postalcrawl.extract.warc_loaders import download_record_generator, offline_record_generator
@@ -66,7 +66,7 @@ def test_offline_record_generator(offline_warc_gen):
 
 def test_filter_html_responses(offline_warc_gen):
     gen = offline_warc_gen
-    gen = filter_html_responses(gen, StatCounter())
+    gen = _filter_html_responses(gen, StatCounter())
     rec1 = next(gen)
     rec2 = next(gen)
     rec3 = next(gen)
@@ -88,7 +88,7 @@ def test_extract_ldjson(resources_dir):
         charset="utf-8",
     )
     gen = iter([record])
-    out = next(extract_ld_json(gen, StatCounter()))
+    out = next(_extract_ld_json(gen, StatCounter()))
     assert out.content[:65] == '{"@context":"http:\\/\\/schema.org","@type":"LocalBusiness","name":'
 
 
@@ -102,7 +102,7 @@ def test_extract_addresses(resources_dir):
         charset="utf-8",
     )
     gen = iter([record])
-    out = list(extract_postal_addresses(gen, StatCounter()))
+    out = list(_extract_postal_addresses(gen, StatCounter()))
     assert len(out) == 2
     assert out[0].locality == "Sukabumi"
     assert out[0].name is None
@@ -152,7 +152,7 @@ def test_extract_addresses_from_ldjson(resources_dir):
     )
 
     gen = iter([record])
-    out = extract_postal_addresses(gen, StatCounter())
+    out = _extract_postal_addresses(gen, StatCounter())
     assert out
 
 
@@ -170,7 +170,7 @@ def test_clean_address_fields(resources_dir):
     )
 
     gen = iter([record])
-    out = next(clean_address_fields(gen, StatCounter()))
+    out = next(_clean_address_fields(gen, StatCounter()))
     assert out.name == "test Name,"
     assert out.street == "test & Street, 27"
     assert out.locality == "Potsdam/P"
