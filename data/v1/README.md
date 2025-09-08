@@ -1,7 +1,4 @@
 
-This directory contains the dataset collected as part of my master thesis.
-When ready i'll provide a new version of the data following some improvements in data collection and validation.
-
 ### Dataset
 
 The dataset comes in 5 variations:
@@ -12,3 +9,5 @@ The dataset comes in 5 variations:
 | 240k         | 240,000         | 8       |                                                                                         |
 | 2m-named     | ~ 2,400,000     | 8       |                                                                                         |
 | 9m-noname    | ~ 9,500,000     | 7       | column `name` excluded                                                                  |
+
+Due to the size of the larger dataset variants. this repo only includes the 2k and 24k variant.
