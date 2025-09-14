@@ -53,5 +53,5 @@ class OsmValidator:
         async with self.semaphore:
             resp = await self.session.get(str(url))
         resp.raise_for_status()
-        osm_data = OsmResponse(**resp.json())
+        osm_data = OsmResponse.model_validate(resp.json())
         return osm_data.extract_address()

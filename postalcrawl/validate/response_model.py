@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import AliasPath, BaseModel, Field
 
 
 class OsmQueryInfo(BaseModel):
@@ -30,8 +30,8 @@ class OsmGeocodeData(BaseModel):
 
 
 class OsmFeature(BaseModel):
-    coordinates: tuple[float, float] = Field(alias="geometry.coordinates")
-    geocoding: OsmGeocodeData = Field(alias="properties.geocoding")
+    coordinates: tuple[float, float] = Field(validation_alias=AliasPath("geometry", "coordinates"))
+    geocoding: OsmGeocodeData = Field(validation_alias=AliasPath("properties", "geocoding"))
     type: str
 
 
