@@ -7,7 +7,6 @@ from pathlib import Path
 import joblib
 import polars as pl
 from loguru import logger
-from tqdm import tqdm
 
 from postalcrawl.extract.extract import extract_addresses
 from postalcrawl.extract.warc_loaders import download_record_generator
@@ -26,6 +25,8 @@ def extract_addresses_from_file_id(file_id: str, dest_dir: Path, skip_existing: 
     if skip_existing and parquet_path.exists():
         logger.info(f"Skipping existing file: {parquet_path}")
         return
+    else:
+        logger.info(f"[{segment=} {seg_num=}] Starting...")
     parquet_path.parent.mkdir(parents=True, exist_ok=True)
 
     # data processing
@@ -63,8 +64,8 @@ def main(source_paths_file: Path, output_dir: Path):
     def extract(file_id: str):
         return extract_addresses_from_file_id(file_id, output_dir)
 
-    tasks = (joblib.delayed(extract)(p) for p in tqdm(paths))
-    joblib.Parallel(n_jobs=6, verbose=9)(tasks)
+    tasks = (joblib.delayed(extract)(p) for p in paths)
+    joblib.Parallel(n_jobs=6, verbose=20)(tasks)
 
 
 if __name__ == "__main__":
