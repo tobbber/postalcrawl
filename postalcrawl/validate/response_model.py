@@ -35,6 +35,22 @@ class OsmFeature(BaseModel):
     type: str
 
 
+class OsmAddress(BaseModel):
+    longitude: float
+    latitude: float
+    name: str | None
+    housenumber: str | None
+    street: str | None
+    postcode: str | None
+    city: str | None
+    country: str | None
+    country_code: str | None
+    locality: str | None
+    district: str | None
+    osm_id: int
+    osm_type: str
+
+
 class OsmResponse(BaseModel):
     features: list[OsmFeature]
     geocoding: OsmQueryInfo
@@ -43,16 +59,16 @@ class OsmResponse(BaseModel):
     def has_results(self) -> bool:
         return bool(self.features)
 
-    def flatten(self) -> dict | None:
+    def extract_address(self) -> OsmAddress | None:
         if not self.has_results():
             return None
         feature = self.features[0]
-        data = {
+        data: dict = {
             "longitude": feature.coordinates[0],
             "latitude": feature.coordinates[1],
             **feature.geocoding.model_dump(),
         }
-        return data
+        return OsmAddress(**data)
 
 
 ### Example response from OSM Nominatim API
