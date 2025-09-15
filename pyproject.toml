@@ -36,6 +36,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "jupyter>=1.1.1",
     "pyright>=1.1.403",
     "pytest>=8.4.1",
     "pytest-asyncio>=1.1.0",
@@ -60,11 +61,3 @@ asyncio_mode = "auto"
 markers = [
 "dev: tests that are only for development purposes",
 ]
-
-[tool.poetry.group.dev.dependencies]
-pytest = "^8.4.2"
-pytest-asyncio = "^1.2.0"
-pytest-clarity = "^1.0.1"
-jupyterlab = "^4.4.7"
-ruff = "^0.13.0"
-
