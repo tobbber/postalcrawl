@@ -1,3 +1,5 @@
+import dataclasses
+
 from pydantic import AliasPath, BaseModel, Field
 
 
@@ -35,7 +37,8 @@ class OsmFeature(BaseModel):
     type: str
 
 
-class OsmAddress(BaseModel):
+@dataclasses.dataclass(frozen=True, slots=True)
+class OsmAddress:
     longitude: float
     latitude: float
     name: str | None
