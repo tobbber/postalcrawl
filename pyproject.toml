@@ -61,10 +61,3 @@ markers = [
 "dev: tests that are only for development purposes",
 ]
 
-[tool.poetry.group.dev.dependencies]
-pytest = "^8.4.2"
-pytest-asyncio = "^1.2.0"
-pytest-clarity = "^1.0.1"
-jupyterlab = "^4.4.7"
-ruff = "^0.13.0"
-
