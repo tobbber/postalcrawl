@@ -2,7 +2,7 @@ import dataclasses
 
 import msgspec
 
-from postalcrawl.models import StringExtract
+from postalcrawl.models import StringRecord
 
 
 def test_serialize():
@@ -10,7 +10,7 @@ def test_serialize():
         d = dataclasses.asdict(dc)
         return msgspec.json.encode(d, order="deterministic")
 
-    data = StringExtract(
+    data = StringRecord(
         content=" foo bar bang dfas;dfjasdhfpoasdifasdfnadslfakurtiaufjansdf;asdf",
         charset="utf-8",
         url="https://example.com",

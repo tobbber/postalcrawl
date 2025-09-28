@@ -8,7 +8,11 @@ import joblib
 import polars as pl
 from loguru import logger
 
-from postalcrawl.extract.extract import extract_addresses
+from postalcrawl.extract.clean_address import _clean_address_fields
+from postalcrawl.extract.extract import filter_html_responses, extractor_response_content, extract_addresses, \
+    record_to_dict
+# from postalcrawl.extract.extract import extract_addresses, filter_html_responses, extractor_response_content, \
+#     filter_contains_postaladdress, extract_ld_json, extract_postal_addresses
 from postalcrawl.extract.warc_loaders import download_record_generator
 from postalcrawl.stats import StatCounter
 from postalcrawl.utils import file_segment_info, project_root
@@ -34,7 +38,7 @@ def extract_addresses_from_file_id(file_id: str, dest_dir: Path, skip_existing: 
         stats = StatCounter()
         gen = download_record_generator(file_id, stats)
         gen = extract_addresses(gen, stats)
-        # gen = tqdm(gen)
+        gen = record_to_dict(gen)
 
         df = pl.DataFrame((x for x in gen))
         df = df.unique()
@@ -62,11 +66,13 @@ def main(source_paths_file: Path, output_dir: Path):
         paths = [p.strip() for p in f.readlines()]
 
     def extract(file_id: str):
-        return extract_addresses_from_file_id(file_id, output_dir)
+        return extract_addresses_from_file_id(file_id, output_dir, False)
 
-    tasks = (joblib.delayed(extract)(p) for p in paths)
+
+    tasks = (joblib.delayed(extract)(p) for p in paths[:1])
     joblib.Parallel(n_jobs=6, verbose=20)(tasks)
 
 
 if __name__ == "__main__":
     main(CC_PATHS_FILE, ADDRESS_OUT_DIR)
+

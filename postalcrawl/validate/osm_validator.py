@@ -23,9 +23,8 @@ class OsmValidator:
                 format="geocodejson",
                 limit=1,
                 addressdetails=1,
-                namedetails=0,  # include name variations (e.g. multilang) and old names in result
-                extratags=0,  # enable for things like opening hours, phone numbers, etc.
-                layer="address",
+                namedetails=1,  # include name variations (e.g. multilang) and old names in result
+                extratags=1,  # enable for things like opening hours, phone numbers, etc.
             )
         )
 
