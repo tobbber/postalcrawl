@@ -16,20 +16,6 @@ logger.remove()
 logger.add(sys.stdout, level="INFO")
 
 
-# def filter_content(gen: Iterable[tuple[T, CrawlMetadata]], func: Callable[[T], bool]):
-#     for content, metadata in gen:
-#         if func(content):
-#             yield content, metadata
-#
-# def flatmap_content( gen: Iterable[tuple[T, CrawlMetadata]], func: Callable[[T], Iterable]):
-#     for content, metadata in gen:
-#         for item in func(content):
-#             yield item, metadata
-#
-# def map_content( gen: Iterable[tuple[T, CrawlMetadata]], func: Callable[[T], any]):
-#     for content, metadata in gen:
-#         yield func(content), metadata
-
 def filter_html_responses(
         record_generator: Iterable[ArcWarcRecord], stats: StatCounter
 ) -> Iterator[ArcWarcRecord]:

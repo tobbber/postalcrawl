@@ -23,10 +23,6 @@ DictRecord = tuple[dict, CrawlMetadata]
 
 @dataclass(frozen=True, slots=True)
 class PostalAddress:
-    # extraction info
-    url: str
-    warc_date: str
-    warc_rec_id: str
     # address
     name: str | None
     street: str | None
