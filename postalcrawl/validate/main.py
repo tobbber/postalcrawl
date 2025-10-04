@@ -1,4 +1,5 @@
 import asyncio
+from tqdm import tqdm
 import json
 from pathlib import Path
 from typing import AsyncIterator, Iterable, Iterator
@@ -8,8 +9,8 @@ import polars as pl
 
 from postalcrawl.validate.osm_validator import OsmValidator
 
-EXTRACT_ROOT = Path("/Users/tobi/Uni/postalcrawlV2/data/extracted_addresses")
-VALIDATE_ROOT = Path("/Users/tobi/Uni/postalcrawlV2/data/validated_addresses")
+EXTRACT_ROOT = Path("/home/tobias/postalcrawl/data/extracted")
+VALIDATE_ROOT = EXTRACT_ROOT.parent / "validated"
 NOMINATIM_URL = "http://localhost:9020"
 # NOMINATIM_URL = "https://nominatim.openstreetmap.org"
 MAX_CONCURRENT = 200
@@ -63,7 +64,7 @@ async def query_validator(
                 "warc_rec_id": warc_rec_id,
                 "warc_date": warc_date,
                 "warc_url": url,
-                "extract": subdict,
+                "crawl": subdict,
             }
             future = await_with_context(future, extract_data)
             tasks.append(future)
@@ -80,7 +81,7 @@ async def main(skip_existing: bool = True):
     all_files = list(EXTRACT_ROOT.glob("**/*.parquet"))
     validator = OsmValidator(NOMINATIM_URL, max_concurrent=MAX_CONCURRENT)
 
-    for extract_file in all_files:
+    for extract_file in tqdm(all_files):
         outfile = VALIDATE_ROOT / extract_file.relative_to(EXTRACT_ROOT).with_suffix(".json")
         outfile.parent.mkdir(parents=True, exist_ok=True)
         if skip_existing and outfile.exists():
@@ -92,6 +93,7 @@ async def main(skip_existing: bool = True):
         results = [rec async for rec in query_validator(validator, df.iter_rows(named=True))]
         with open(outfile, "w") as f:
             json.dump(results, f)
+        break
 
 
 if __name__ == "__main__":

@@ -44,13 +44,6 @@ class OsmValidator:
         logger.info("Unsupported address field type: %s", type(value))
         return None
 
-    # async def validate_iter(
-    #     self, addresses: Iterable[PostalAddress]
-    # ) -> list[tuple[PostalAddress, OsmAddress]]:
-    #     tasks = [self.query_validator(address) for address in addresses]
-    #     results = await asyncio.gather(*tasks)
-    #     return [(adr, result) for adr, result in zip(addresses, results) if result is not None]
-
     # async def query_validator(self, query_address: PostalAddress) -> dict | None:
     async def query_validator(
         self, name: str, street: str, city: str, state: str, country: str, postalcode: str
