@@ -1,21 +1,22 @@
 import asyncio
+import json
 from pathlib import Path
-from typing import Iterable, Iterator, AsyncIterator
+from typing import AsyncIterator, Iterable, Iterator
 
 import msgspec
 import polars as pl
 
 from postalcrawl.validate.osm_validator import OsmValidator
 
-
-EXTRACT_ROOT = Path("/Users/tobi/dev/postalcrawlV2/data/extracted_addresses")
-VALIDATE_ROOT = Path("/Users/tobi/dev/postalcrawlV2/data/validated_addresses")
+EXTRACT_ROOT = Path("/Users/tobi/Uni/postalcrawlV2/data/extracted_addresses")
+VALIDATE_ROOT = Path("/Users/tobi/Uni/postalcrawlV2/data/validated_addresses")
 NOMINATIM_URL = "http://localhost:9020"
 # NOMINATIM_URL = "https://nominatim.openstreetmap.org"
-MAX_CONCURRENT = 5
+MAX_CONCURRENT = 200
+
 
 def get_all_subdicts(root: dict | list) -> Iterator[dict]:
-    """ yield all sub-dicts in a nested dict/list structure """
+    """yield all sub-dicts in a nested dict/list structure"""
     if isinstance(root, dict):
         yield root
         for v in root.values():
@@ -25,35 +26,25 @@ def get_all_subdicts(root: dict | list) -> Iterator[dict]:
             yield from get_all_subdicts(item)
 
 
-def flatten_nested_dict_iter(d, parent_key='') -> Iterator[tuple[str, any]]:
-    if isinstance(d, dict):
-        for k, v in d.items():
-            yield from flatten_nested_dict_iter(v, parent_key=f'{parent_key}.{k}' if parent_key else k)
-    elif isinstance(d, list):
-        for i, v in enumerate(d):
-            yield from flatten_nested_dict_iter(v, parent_key=f'{parent_key}.{i}' if parent_key else str(i))
-    else:
-        yield parent_key, d
-
-
-async def query_validator(validator: OsmValidator, extract_rows: Iterable[dict]) -> AsyncIterator[dict]:
-
+async def query_validator(
+    validator: OsmValidator, extract_rows: Iterable[dict]
+) -> AsyncIterator[dict]:
     async def await_with_context(future, *context):
-            result = await future
-            return (result, *context)
+        result = await future
+        return (result, *context)
 
     tasks = []
     for row in extract_rows:
-        url = row['url']
-        warc_rec_id = row['warc_rec_id']
-        warc_date = row['warc_date']
+        url = row["url"]
+        warc_rec_id = row["warc_rec_id"]
+        warc_date = row["warc_date"]
         try:
-            data = msgspec.json.decode(row['data'])
+            data = msgspec.json.decode(row["data"])
         except msgspec.DecodeError:
             continue
 
         for subdict in get_all_subdicts(data):
-            if not "address" in subdict.keys():
+            if "address" not in subdict.keys():
                 continue
             address = subdict.get("address")
             if not isinstance(address, dict):
@@ -61,12 +52,12 @@ async def query_validator(validator: OsmValidator, extract_rows: Iterable[dict])
             if address.get("@type") != "PostalAddress":
                 continue
             future = validator.query_validator(
-                name=subdict.get("name") or subdict.get("legalName"),
-                street=address.get("streetAddress"),
-                city=address.get("addressLocality"),
-                postalcode=address.get("postalCode"),
-                country=address.get("addressCountry"),
-                state=address.get("addressRegion"),
+                name=subdict.get("name") or subdict.get("legalName"),  # pyright: ignore [reportArgumentType]
+                street=address.get("streetAddress"),  # pyright: ignore [reportArgumentType]
+                city=address.get("addressLocality"),  # pyright: ignore [reportArgumentType]
+                postalcode=address.get("postalCode"),  # pyright: ignore [reportArgumentType]
+                country=address.get("addressCountry"),  # pyright: ignore [reportArgumentType]
+                state=address.get("addressRegion"),  # pyright: ignore [reportArgumentType]
             )
             extract_data = {
                 "warc_rec_id": warc_rec_id,
@@ -77,39 +68,30 @@ async def query_validator(validator: OsmValidator, extract_rows: Iterable[dict])
             future = await_with_context(future, extract_data)
             tasks.append(future)
 
-    for result in asyncio.as_completed(*tasks):
-        response, extract_data = result # both are dicts
+    for future in asyncio.as_completed(tasks):
+        result = await future
+        response, extract_data = result  # both are dicts
         if response is None:
             continue
-        yield  {"osm": response, **extract_data}
+        yield {"osm": response, **extract_data}
 
-
-async def validate_parquet(input_path: Path, output_path: Path):
-
-    validator = OsmValidator(NOMINATIM_URL, max_concurrent=MAX_CONCURRENT)
-    df = pl.read_parquet(input_path)
-    results = [rec async for rec in query_validator(validator, df.iter_rows(named=True))]
-    out_df = pl.DataFrame(results)
-    out_df.write_parquet(output_path, compression="brotli")
 
 async def main(skip_existing: bool = True):
     all_files = list(EXTRACT_ROOT.glob("**/*.parquet"))
+    validator = OsmValidator(NOMINATIM_URL, max_concurrent=MAX_CONCURRENT)
 
     for extract_file in all_files:
-        outfile= VALIDATE_ROOT / extract_file.relative_to(EXTRACT_ROOT)
+        outfile = VALIDATE_ROOT / extract_file.relative_to(EXTRACT_ROOT).with_suffix(".json")
+        outfile.parent.mkdir(parents=True, exist_ok=True)
         if skip_existing and outfile.exists():
             print(f"Skipping existing file: {outfile}")
             continue
         print(f"Validating {extract_file} -> {outfile}")
-        await validate_parquet(extract_file, outfile)
 
-    # p = Path('/Users/tobi/dev/postalcrawlV2/data/extracted_addresses/1751905933612.63/00000.parquet')
-    # out_path = p.with_suffix('.validated.json')
-    # await validate_parquet(p, out_path)
-
-
-    # tasks = (joblib.delayed(extract)(p) for p in paths[:1])
-    # joblib.Parallel(n_jobs=6, verbose=20)(tasks)
+        df = pl.read_parquet(extract_file)
+        results = [rec async for rec in query_validator(validator, df.iter_rows(named=True))]
+        with open(outfile, "w") as f:
+            json.dump(results, f)
 
 
 if __name__ == "__main__":
