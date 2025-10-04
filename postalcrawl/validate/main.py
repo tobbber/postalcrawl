@@ -1,6 +1,6 @@
 import asyncio
 from pathlib import Path
-from typing import Iterable, Iterator
+from typing import Iterable, Iterator, AsyncIterator
 
 import msgspec
 import polars as pl
@@ -36,7 +36,7 @@ def flatten_nested_dict_iter(d, parent_key='') -> Iterator[tuple[str, any]]:
         yield parent_key, d
 
 
-async def query_validator(validator: OsmValidator, extract_rows: Iterable[dict]) -> Iterator[dict]:
+async def query_validator(validator: OsmValidator, extract_rows: Iterable[dict]) -> AsyncIterator[dict]:
 
     async def await_with_context(future, *context):
             result = await future
@@ -81,18 +81,14 @@ async def query_validator(validator: OsmValidator, extract_rows: Iterable[dict])
         response, extract_data = result # both are dicts
         if response is None:
             continue
-        nested_dict = {"osm": response, **extract_data}
-        flat_dict = {k: v for k, v in flatten_nested_dict_iter(nested_dict)}
-        yield flat_dict
-
-
+        yield  {"osm": response, **extract_data}
 
 
 async def validate_parquet(input_path: Path, output_path: Path):
 
     validator = OsmValidator(NOMINATIM_URL, max_concurrent=MAX_CONCURRENT)
     df = pl.read_parquet(input_path)
-    results = await query_validator(validator, df.iter_rows(named=True))
+    results = [rec async for rec in query_validator(validator, df.iter_rows(named=True))]
     out_df = pl.DataFrame(results)
     out_df.write_parquet(output_path, compression="brotli")
 
