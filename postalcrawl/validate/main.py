@@ -99,7 +99,7 @@ EXTRACT_ROOT = Path("/home/tobias/postalcrawl/data/extracted")
 VALIDATE_ROOT = EXTRACT_ROOT.parent / "validated"
 NOMINATIM_URL = "http://localhost:9020"
 # NOMINATIM_URL = "https://nominatim.openstreetmap.org"
-MAX_CONCURRENT = 3000
+MAX_CONCURRENT = 1000
 
 
 def get_all_subdicts(root: dict | list) -> Iterator[dict]:
