@@ -8,10 +8,10 @@ from tqdm import tqdm
 
 from postalcrawl.extract.clean_address import _clean_address_fields
 from postalcrawl.extract.extract import (
-    StringExtract,
-    _extract_ld_json,
-    _extract_postal_addresses,
-    _filter_html_responses,
+    StringRecord,
+    extract_ld_json,
+    extract_postal_addresses,
+    filter_html_responses,
     extract_addresses,
 )
 from postalcrawl.extract.utils import parse_content_type
@@ -66,7 +66,7 @@ def test_offline_record_generator(offline_warc_gen):
 
 def test_filter_html_responses(offline_warc_gen):
     gen = offline_warc_gen
-    gen = _filter_html_responses(gen, StatCounter())
+    gen = filter_html_responses(gen, StatCounter())
     rec1 = next(gen)
     rec2 = next(gen)
     rec3 = next(gen)
@@ -80,7 +80,7 @@ def test_filter_html_responses(offline_warc_gen):
 
 def test_extract_ldjson(resources_dir):
     content = read_file(resources_dir / "response.1.html")
-    record = StringExtract(
+    record = StringRecord(
         content=content,
         url="https://example.com",
         warc_date="2023-10-01T00:00:00Z",
@@ -88,13 +88,13 @@ def test_extract_ldjson(resources_dir):
         charset="utf-8",
     )
     gen = iter([record])
-    out = next(_extract_ld_json(gen, StatCounter()))
+    out = next(extract_ld_json(gen, StatCounter()))
     assert out.content[:65] == '{"@context":"http:\\/\\/schema.org","@type":"LocalBusiness","name":'
 
 
 def test_extract_addresses(resources_dir):
     content = read_file(resources_dir / "ldjson.1.json")
-    record = StringExtract(
+    record = StringRecord(
         content=content,
         url="https://example.com",
         warc_date="2023-10-01T00:00:00Z",
@@ -102,7 +102,7 @@ def test_extract_addresses(resources_dir):
         charset="utf-8",
     )
     gen = iter([record])
-    out = list(_extract_postal_addresses(gen, StatCounter()))
+    out = list(extract_postal_addresses(gen, StatCounter()))
     assert len(out) == 2
     assert out[0].locality == "Sukabumi"
     assert out[0].name is None
@@ -143,7 +143,7 @@ def test_parse_content_type():
 
 def test_extract_addresses_from_ldjson(resources_dir):
     content = read_file(resources_dir / "ldjson.1.json")
-    record = StringExtract(
+    record = StringRecord(
         content=content,
         url="https://example.com",
         warc_date="2023-10-01T00:00:00Z",
@@ -152,7 +152,7 @@ def test_extract_addresses_from_ldjson(resources_dir):
     )
 
     gen = iter([record])
-    out = _extract_postal_addresses(gen, StatCounter())
+    out = extract_postal_addresses(gen, StatCounter())
     assert out
 
 

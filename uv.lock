@@ -1577,18 +1577,9 @@ wheels = [
 ]
 
 [[package]]
-name = "postal"
-version = "1.1.10"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "six" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/05/2c/d9415af37a3c62431cc5cf0877258486ba8af443bb121a239f219efcace4/postal-1.1.10.tar.gz", hash = "sha256:ca0f9693d61261e058a03d141a4fa065d9bbe67bd86484521450f0a9d0f9e77b", size = 21115, upload-time = "2022-03-25T20:23:36.691Z" }
-
-[[package]]
 name = "postalcrawl"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "httpx" },
     { name = "joblib" },
@@ -1602,7 +1593,6 @@ dependencies = [
     { name = "pandas-stubs" },
     { name = "parsel" },
     { name = "polars" },
-    { name = "postal" },
     { name = "pyarrow" },
     { name = "pycountry" },
     { name = "pydantic" },
@@ -1640,7 +1630,6 @@ requires-dist = [
     { name = "pandas-stubs", specifier = "==2.3.0.250703" },
     { name = "parsel", specifier = ">=1.10.0" },
     { name = "polars", specifier = ">=1.31.0" },
-    { name = "postal", specifier = ">=1.1.10,<2.0.0" },
     { name = "pyarrow", specifier = ">=21.0.0" },
     { name = "pycountry", specifier = ">=24.6.1,<25.0.0" },
     { name = "pydantic", specifier = ">=2.11.7" },

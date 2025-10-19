@@ -66,6 +66,7 @@ class OsmResponse(BaseModel):
         if not self.has_results():
             return None
         feature = self.features[0]
+        return feature
         data: dict = {
             "longitude": feature.coordinates[0],
             "latitude": feature.coordinates[1],
