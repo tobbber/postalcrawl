@@ -23,7 +23,7 @@ def flatten_nested_dict_iter(d, parent_key="") -> Iterator[tuple[str, Any]]:
 
 
 def main():
-    validated_dir = Path("/Users/tobi/Uni/postalcrawlV2/data/validated_addresses")
+    validated_dir = Path("/home/tobias/postalcrawl/data/validated")
     for jsonfile in tqdm(list(validated_dir.glob("**/*.json"))):
         with open(jsonfile, encoding="utf-8") as f:
             outfile = jsonfile.with_suffix(".flat.parquet")
@@ -31,9 +31,8 @@ def main():
             flat_data = []
             for row in data:
                 flat_data.append(dict(flatten_nested_dict_iter(row)))
-            df = pl.DataFrame(data=flat_data)
+            df = pl.DataFrame(data=flat_data, infer_schema_length=1000)
             df.write_parquet(outfile)
-            pprint(list(zip(df.dtypes, df.columns)))
 
 
 if __name__ == "__main__":
