@@ -35,6 +35,12 @@ class OsmValidator:
             )
         )
 
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.session.close()
+
     @staticmethod
     def ensure_string(value) -> str | None:
         if value is None:
@@ -169,21 +175,22 @@ async def query_validator(
 
 async def main(skip_existing: bool = True):
     all_files = list(EXTRACT_ROOT.glob("**/*.parquet"))
-    validator = OsmValidator(NOMINATIM_URL, max_concurrent=MAX_CONCURRENT)
+    async with OsmValidator(NOMINATIM_URL, max_concurrent=MAX_CONCURRENT) as validator:
+        pbar = tqdm(all_files)
+        for extract_file in pbar:
+            outfile = VALIDATE_ROOT / extract_file.relative_to(EXTRACT_ROOT).with_suffix(".json.gz")
+            outfile.parent.mkdir(parents=True, exist_ok=True)
+            if skip_existing and outfile.exists():
+                print(f"Skipping existing file: {outfile}")
+                continue
+            logger.info(f"Validating {extract_file} -> {outfile}")
+            df = pl.read_parquet(extract_file)
+            results = [
+                rec async for rec in atqdm(query_validator(validator, df.iter_rows(named=True)))
+            ]
 
-    pbar = tqdm(all_files)
-    for extract_file in pbar:
-        outfile = VALIDATE_ROOT / extract_file.relative_to(EXTRACT_ROOT).with_suffix(".json.gz")
-        outfile.parent.mkdir(parents=True, exist_ok=True)
-        if skip_existing and outfile.exists():
-            print(f"Skipping existing file: {outfile}")
-            continue
-        logger.info(f"Validating {extract_file} -> {outfile}")
-        df = pl.read_parquet(extract_file)
-        results = [rec async for rec in atqdm(query_validator(validator, df.iter_rows(named=True)))]
-
-        with gzip.open(outfile, "wt", encoding="utf-8") as zipfile:
-            json.dump(results, zipfile, indent=2)
+            with gzip.open(outfile, "wt", encoding="utf-8") as zipfile:
+                json.dump(results, zipfile, indent=2)
 
 
 if __name__ == "__main__":
