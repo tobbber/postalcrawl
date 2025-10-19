@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import TypeVar
 
 
 @dataclass(frozen=True, slots=True)
@@ -8,17 +7,10 @@ class CrawlMetadata:
     warc_rec_id: str
     warc_date: str
 
-# @dataclass(frozen=True, slots=True)
-# class StringRecord:
-#     content: str
-#     url: str
-#     warc_rec_id: str
-#     warc_date: str
 
 StringRecord = tuple[str, CrawlMetadata]
 
 DictRecord = tuple[dict, CrawlMetadata]
-
 
 
 @dataclass(frozen=True, slots=True)

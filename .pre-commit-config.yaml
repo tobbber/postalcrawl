@@ -32,9 +32,3 @@ repos:
         language: system
         types_or: [python]
         require_serial: true # run once for all files
-      - id: pyright
-        name: pyright
-        entry: uv run pyright
-        language: system
-        types: [python]
-        require_serial: true # run once for all files

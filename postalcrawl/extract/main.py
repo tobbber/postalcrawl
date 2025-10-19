@@ -9,8 +9,6 @@ import polars as pl
 from loguru import logger
 
 from postalcrawl.extract.extract import (
-    filter_html_responses,
-    extractor_response_content,
     extract_addresses,
     record_to_dict,
 )

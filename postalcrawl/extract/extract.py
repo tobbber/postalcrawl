@@ -1,7 +1,6 @@
 import dataclasses
-import polars as pl
 import sys
-from typing import Iterable, Iterator, Callable, TypeVar, Any
+from typing import Any, Callable, Iterable, Iterator
 
 import msgspec
 from loguru import logger
@@ -9,7 +8,7 @@ from parsel import Selector
 from warcio.recordloader import ArcWarcRecord
 
 from postalcrawl.extract.utils import parse_content_type
-from postalcrawl.models import PostalAddress, StringRecord, CrawlMetadata, DictRecord
+from postalcrawl.models import CrawlMetadata, DictRecord, StringRecord
 from postalcrawl.stats import StatCounter
 
 logger.remove()
@@ -17,7 +16,7 @@ logger.add(sys.stdout, level="INFO")
 
 
 def filter_html_responses(
-        record_generator: Iterable[ArcWarcRecord], stats: StatCounter
+    record_generator: Iterable[ArcWarcRecord], stats: StatCounter
 ) -> Iterator[ArcWarcRecord]:
     """
     Filter WARC records to only include HTTP responses with HTML or XML content types.
@@ -47,7 +46,7 @@ def filter_html_responses(
 
 
 def extractor_response_content(
-        response_generator: Iterable[ArcWarcRecord], stats: StatCounter
+    response_generator: Iterable[ArcWarcRecord], stats: StatCounter
 ) -> Iterator[StringRecord]:
     """
     Extract and decode the content of WARC HTTP response records.
@@ -69,13 +68,13 @@ def extractor_response_content(
         metadata = CrawlMetadata(
             url=record.rec_headers.get_header("WARC-Target-URI"),
             warc_rec_id=record.rec_headers.get_header("WARC-Record-ID"),
-            warc_date=record.rec_headers.get_header("WARC-Date")
+            warc_date=record.rec_headers.get_header("WARC-Date"),
         )
         yield content, metadata
 
 
 def extract_ld_json(
-        response_generator: Iterable[StringRecord], stats: StatCounter
+    response_generator: Iterable[StringRecord], stats: StatCounter
 ) -> Iterator[StringRecord]:
     """
     Extract JSON-LD scripts from HTML content.
@@ -97,7 +96,9 @@ def extract_ld_json(
             yield ld_json, metadata
 
 
-def deserialize_json_records(records: Iterable[StringRecord], stats: StatCounter) -> Iterator[DictRecord]:
+def deserialize_json_records(
+    records: Iterable[StringRecord], stats: StatCounter
+) -> Iterator[DictRecord]:
     for content, metadata in records:
         try:
             deserialized: dict = msgspec.json.decode(content)
@@ -106,7 +107,6 @@ def deserialize_json_records(records: Iterable[StringRecord], stats: StatCounter
             logger.debug(f"Failed to load as JSON with error: {e}\n{content[:60]}")
             stats.inc("error/json/decode_error")
             continue
-
 
 
 def deserialize_json(records: Iterable[StringRecord], stats: StatCounter) -> Iterator[DictRecord]:
@@ -120,12 +120,14 @@ def deserialize_json(records: Iterable[StringRecord], stats: StatCounter) -> Ite
             continue
 
 
-def record_to_dict(records: Iterable[tuple[any, CrawlMetadata]]) -> Iterator[dict]:
+def record_to_dict(records: Iterable[tuple[Any, CrawlMetadata]]) -> Iterator[dict]:
     for data, metadata in records:
         yield {"data": data, **dataclasses.asdict(metadata)}
 
-def extract_json_by_condition(records: Iterable[DictRecord], condition: Callable[[dict], bool]) -> Iterator[DictRecord]:
 
+def extract_json_by_condition(
+    records: Iterable[DictRecord], condition: Callable[[dict], bool]
+) -> Iterator[DictRecord]:
     def subjson_iter(root: dict | list) -> Iterator[dict]:
         if isinstance(root, dict):
             yield root
@@ -141,49 +143,13 @@ def extract_json_by_condition(records: Iterable[DictRecord], condition: Callable
                 yield subjson, metadata
 
 
-# def extract_postal_addresses(
-#         gen: Iterable[DictRecord], stats: StatCounter
-# ) -> Iterator[PostalAddress]:
-#     for record in gen:
-#         for json_data in unpack_json(data):
-#             address = json_data.get("address")
-#             if not isinstance(address, dict):
-#                 continue
-#             if address.get("@type") != "PostalAddress":
-#                 continue
-#             stats.inc("postal_address/extracted")
-#
-#             name = json_data.get("name")
-#             country = address.get("addressCountry")
-#             region = address.get("addressRegion")
-#             locality = address.get("addressLocality")
-#             postal_code = address.get("postalCode")
-#             street_address = address.get("streetAddress")
-#
-#             yield PostalAddress(
-#                 name=name,
-#                 country=country,
-#                 locality=locality,
-#                 region=region,
-#                 postalCode=postal_code,
-#                 street=street_address,
-#                 url=record.url,
-#                 warc_date=record.warc_date,
-#                 warc_rec_id=record.warc_rec_id,
-#             )
-
-
 def extract_addresses(
-        record_generator: Iterable[ArcWarcRecord], stats: StatCounter
+    record_generator: Iterable[ArcWarcRecord], stats: StatCounter
 ) -> Iterator[StringRecord]:
     gen = filter_html_responses(record_generator, stats)
     gen = extractor_response_content(gen, stats)
     gen = ((content, metadata) for content, metadata in gen if "postaladdress" in content.lower())
     gen = extract_ld_json(gen, stats)
     gen = ((content, metadata) for content, metadata in gen if "postaladdress" in content.lower())
-    # gen = (content for content, metadata in gen)
 
-    # gen = deserialize_json(gen, stats)
-    # gen = extract_postal_addresses(gen, stats)
-    # gen = _clean_address_fields(gen, stats)
     yield from gen
