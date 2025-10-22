@@ -5,11 +5,11 @@ from loguru import logger
 from niquests import AsyncSession, HTTPError
 from urllib3 import Retry
 
+from postalcrawl.record import Record
+
 
 class OsmValidator:
     def __init__(self, nominatim_url: str, max_concurrent: int = 200):
-        # todo: implement per-second rate limiting to support nominatims official api (max 1 req/s)
-        #  could be done by a semaphore wrapper that keeps track of last acquire time
         self.semaphore = asyncio.Semaphore(max_concurrent)
         self.session = AsyncSession(retries=Retry(total=5, backoff_factor=1))
         self.endpoint: yarl.URL = (
@@ -23,6 +23,12 @@ class OsmValidator:
                 extratags=1,  # enable for things like opening hours, phone numbers, etc.
             )
         )
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.session.close()
 
     @staticmethod
     def ensure_string(value) -> str | None:
@@ -58,7 +64,7 @@ class OsmValidator:
         }
         # try:
         query_params = {k: OsmValidator.ensure_string(v) for k, v in query_params.items()}
-        query_params = {k: v for k, v in query_params.items() if v is not None}
+        query_params = {k: v for k, v in query_params.items() if v}
         if len(query_params) == 0:
             return None
         try:
@@ -67,18 +73,35 @@ class OsmValidator:
             logger.warning(f"Invalid URL for query params: {query_params}")
             return None
         async with self.semaphore:
+            logger.info(f"Sending query to OSM: {url}")
             resp = await self.session.get(str(url))
 
         try:
             resp.raise_for_status()
-        except HTTPError:
-            logger.warning(f"HTTP error for URL: {url}")
+        except HTTPError as e:
+            logger.warning(f"HTTP error for URL: {url}: {e}")
             return None
-        # except Exception as e:
-        #     return None
 
         response_data = resp.json()
         if response_data:
             if response_data.get("features"):
                 return response_data["features"][0]
         return None
+
+    async def record_query_validator(self, record: Record[dict]) -> dict | None:
+        data = record["data"]
+        address = data["address"]
+        query_params = dict(
+            name=data.get("name") or data.get("legalName"),
+            street=address.get("streetAddress"),
+            city=address.get("addressLocality"),
+            postalcode=address.get("postalCode"),
+            country=address.get("addressCountry"),
+            state=address.get("addressRegion"),
+        )
+        result = await self.query_validator(**query_params)
+        return {
+            "osm": result,
+            "crawl": record,
+            "address_query": query_params,
+        }

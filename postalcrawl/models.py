@@ -2,18 +2,6 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True, slots=True)
-class CrawlMetadata:
-    url: str
-    warc_rec_id: str
-    warc_date: str
-
-
-StringRecord = tuple[str, CrawlMetadata]
-
-DictRecord = tuple[dict, CrawlMetadata]
-
-
-@dataclass(frozen=True, slots=True)
 class PostalAddress:
     # address
     name: str | None
